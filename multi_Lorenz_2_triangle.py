@@ -4,12 +4,13 @@
     进度：
     1.初始化增益赋值为常数，等间隔
         画出增益谱
-        画出频移BFS后的梳齿
+        画出梳齿
     2.计算绝对值误差
         3db带宽范围：fmax-fmin+FWHM（半峰全宽）
         插值采样（待补充）
 
     3.加入反馈（目前是简易版）
+        画图同时观察梳齿与对应增益时，令BFS=0，并修改扫频范围（注意扫频点数不要太少，否则影响反馈效果
 '''
 import numpy as np
 import cmath
@@ -85,19 +86,19 @@ def normalize_amp_seq(amp_seq, f_seq):
     return None
 
 
-def add_lorenz(x, amp_seq, f_seq, gamma_b):
+def add_lorenz(x, amp_seq, f_seq, gamma_b, BFS):
     total_brian = np.zeros(x.size)
     for i in range(f_seq.size):
-        total_brian += (amp_seq[i]**2) * lorenz(x, f_seq[i], gamma_b)
+        total_brian += (amp_seq[i]**2) * lorenz(x, f_seq[i]-BFS, gamma_b)
     total_brian = 10 / np.log(10) * total_brian
     return total_brian
 
 
-def conv_lorenz(x, amp_seq, f_seq, gamma_b):
+def conv_lorenz(x, amp_seq, f_seq, gamma_b, BFS):
     # f_seq---每个泵浦所在频率点（=df+BFS）
     total_brian = np.zeros(x.size).astype('complex128')
     for i in range(f_seq.size):
-        total_brian += complex_lorenz(x, f_seq[i], gamma_b)*(amp_seq[i]**2)
+        total_brian += complex_lorenz(x, f_seq[i]-BFS, gamma_b)*(amp_seq[i]**2)
     total_brian = 10 / np.log(10) * total_brian
     return total_brian
 
@@ -171,12 +172,11 @@ if __name__ == '__main__':
     N_pump = 15  # 梳齿个数；对称：奇数
     df = 6  # MHz
     gamma_B = 15  # 布里渊线宽，单位MHz
-    central_freq = 14 * 10 ** 3  # 滤波器中心频率
-    BFS = 10.7 * 10 ** 3  # BFS，暂时用不到，现在假设布里渊增益以泵浦为中心频率
+    central_freq = 3.3 * 10 ** 3  # 泵浦中心频率（MHz）
+    BFS = 0  # 布里渊频移（MHz），同时观察梳齿与增益关系时置零
     type_filter = 'square'  # type_filter='square','triangle'
     N_iteration = 5  # 迭代次数
-    alpha = 0.003  # 迭代系数
-    beta = 0.003  # 边界迭代系数
+    alpha = 0.003  # 迭代系数--和平均梳齿幅值相同
 
     '''初始化频梳幅值与频率'''
     amp_seq = initial_amp_seq(N_pump, type_filter)
@@ -188,15 +188,16 @@ if __name__ == '__main__':
     # amp_seq[4] = 0.0032
     # amp_seq[-5] = 0.9
     # amp_seq[-1] = 0.2
-    '''均值归一化泵浦梳齿'''
+    '''归一化泵浦梳齿（未完成）'''
     # amp_seq_sum = np.sum(amp_seq)
     # amp_seq = amp_seq / amp_seq_sum
     print('amp_seq:', amp_seq)
 
     '''测量增益谱并作图与泵浦比较'''
-    f_measure = np.linspace(13.5*10**3, 14.5*10**3, 10000)  # 扫频范围，单位MHz
+    f_measure = np.linspace(3.2*10**3, 4.0*10**3, 20000)  # 扫频范围，单位MHz
+    plt.xlim(3200, 3400)  # 横坐标范围
 
-    measure_brian = add_lorenz(f_measure, amp_seq, f_seq, gamma_B)  # 单位MHz
+    measure_brian = add_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
     plt.plot(f_measure, measure_brian, label='反馈前'+type_filter)  # 画总增益谱
     plt.bar(f_seq, amp_seq / amp_seq.max() * measure_brian.max()/2, label='反馈前泵浦', width=1.1, color="k")  # 画频移后泵浦梳齿
 
@@ -206,13 +207,13 @@ if __name__ == '__main__':
     # arg_lorenz = np.arctan(imag_lorenz/real_lorenz)
     # plt.plot(f_measure, real_lorenz, label='宽谱' )  # 画增益谱
     # plt.plot(f_measure, arg_lorenz, label='相位' )  # 画相位
-    measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B)
+    measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)
     plt.plot(f_measure, measure_brian.real, label='宽谱卷积' + type_filter)
     # plt.plot(f_measure, measure_brian.imag, label='宽谱相位' + type_filter)
 
     '''迭代反馈'''
-    f_index = search_index(f_seq, f_measure)  # 找到梳齿对应位置索引
-    f_measure_sam = [f_measure[i] for i in f_index]  # 最接近频梳频率的采样点频率
+    f_index = search_index(f_seq-BFS, f_measure)  # 找到梳齿对应单布里渊增益中心位置索引
+    f_measure_sam = [f_measure[i] for i in f_index]  # 最接近频梳对应的单布里渊增益中心的采样点频率
 
     # for _ in range(N_iteration):
     #     brian_measure_sam = np.array([measure_brian[i] for i in f_index])  # 最接近频梳频率的采样点增益
@@ -224,11 +225,13 @@ if __name__ == '__main__':
     #     print('error_brian_seq:', error_brian_seq)
     #
     #     # 更新amp_seq，目前有三种方式
-    #     # beta = np.mean(amp_seq)
+    #     # 方式1
     #     # amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
     #     # amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
     #     # amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+    #     # 方式2
     #     amp_seq = np.sqrt(expected_gain_sam / brian_measure_sam) * amp_seq  # （3-7）-->边界收敛不一致
+    #     # 方式3
     #     # amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正-->需解决放大（归一化？）
     #
     #     # amp_seq = (amp_seq - min(amp_seq)) / (max(amp_seq)-min(amp_seq))
@@ -251,15 +254,17 @@ if __name__ == '__main__':
         print('error_brian_seq:', error_brian_seq)
 
         # 更新amp_seq，目前有三种方式
-        # beta = np.mean(amp_seq)
-        amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
-        amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
-        amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+        # 方式1
+        # amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
+        # amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
+        # amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+        # 方式2
         # amp_seq = np.sqrt(expected_gain_sam / brian_measure_sam) * amp_seq  # （3-7）-->边界收敛不一致
-        # amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正
+        # 方式3
+        amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正
 
         # amp_seq = (amp_seq - min(amp_seq)) / (max(amp_seq)-min(amp_seq))
-        measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B)  # 单位MHz
+        measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
 
     plt.plot(f_measure, measure_brian.real, label='迭代' + str(N_iteration) + '次幅值', color='g')
     plt.plot(f_measure, measure_brian.imag, label='迭代' + str(N_iteration) + '次相位', color='g')
@@ -269,6 +274,5 @@ if __name__ == '__main__':
 
     plt.title('梳齿数:' + str(N_pump) + '；间隔:' + str(df) + 'MHz；线宽:' + str(gamma_B) + 'MHz')
 
-    plt.xlim(13900, 14100)
     plt.legend()
     plt.show()
