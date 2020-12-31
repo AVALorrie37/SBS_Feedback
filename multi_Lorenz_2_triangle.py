@@ -11,6 +11,7 @@
 
     3.加入反馈（目前是简易版）
         画图同时观察梳齿与对应增益时，令BFS=0，并修改扫频范围（注意扫频点数不要太少，否则影响反馈效果
+
 '''
 import numpy as np
 import cmath
@@ -24,44 +25,46 @@ mpl.rcParams['font.sans-serif'] = ['SimHei']
 mpl.rcParams['font.serif'] = ['KaiTi']
 mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显示为方块的问题,或者转换负号为字符串
 
-
 def lorenz(omega, omega_B, gamma_B):
     # 输入：频率-omega；omega_B-布里渊增益最大点（BFS）；gamma_B-布里渊线宽
     # 输出：Lorenz型的增益因子g_B * g_0 * L_eff/A_eff
-    g_0 = 4 * 10 ** (-11)  # 代入石英光纤典型参量值，单位m/W
-    alpha = 0.22  # 光纤损耗，单位db/km
-    L_eff = 10**3 * (1-np.exp(-alpha*10))/alpha  # 代入光纤长度10km
-    MFD = 10.4 * 10 **(-6) # G652D模场直径：10.4+-0.8 um of 1550nm
+    g_0 = 5 * 10 ** (-11)  # 代入石英光纤典型参量值，单位m/W
+    alpha = 0.19  # 光纤损耗，单位db/km
+    L_eff = 10.2**3 * (1-np.exp(-alpha*10))/alpha  # 代入光纤长度10.2km
+    MFD = 10.3 * 10 ** (-6)  # G652D模场直径：10.4+-0.8 um of 1550nm
     A_eff = pi * MFD**2 / 4  # 此处近似修正因子k=1
-    gain_max = g_0 * L_eff/A_eff  # lorenz峰值
+    gain_max = g_0 * L_eff/A_eff /2  # lorenz峰值
     # gain_max = 10000
     gamma_b22 = (gamma_B / 2) ** 2
     gain_lorenz = gain_max * gamma_b22 / ((omega-omega_B)**2 + gamma_b22)
+
+    VNA_amp_db_max = 10 / np.log(10) * (gain_max*0.05/2 + np.log(np.sqrt(5*10**(-7))))
+    print('VNA_amp_db_max=', VNA_amp_db_max)
     return gain_lorenz
 
 
 def complex_lorenz(omega, omega_B, gamma_B):
     # 输入：频率-omega；omega_B-布里渊增益最大点（BFS）；gamma_B-布里渊线宽
     # 输出：Lorenz型的增益因子g_B * g_0 * L_eff/A_eff
-    g_0 = 4 * 10 ** (-11)  # 代入石英光纤典型参量值，单位m/W
-    alpha = 0.22  # 光纤损耗，单位db/km
-    L_eff = 10**3 * (1-np.exp(-alpha*10))/alpha  # 代入光纤长度10km
-    MFD = 10.4 * 10 **(-6)  # G652D模场直径：10.4+-0.8 um of 1550nm
+    g_0 = 5 * 10 ** (-11)  # 代入石英光纤典型参量值，单位m/W
+    alpha = 0.19  # 光纤损耗，单位db/km
+    L_eff = 10.2**3 * (1-np.exp(-alpha*10))/alpha  # 代入光纤长度10km
+    MFD = 10.3 * 10 **(-6)  # G.652D模场直径：10.4+-0.8 um of 1550nm
     A_eff = pi * MFD**2 / 4  # 此处近似修正因子k=1
-    gain_max = g_0 * L_eff/A_eff  # lorenz峰值
+    gain_max = g_0 * L_eff/A_eff /2   # lorenz峰值
     gain_lorenz = gain_max * gamma_B/2/(gamma_B/2-(omega-omega_B)*1j)
     return gain_lorenz
 
 
 def initial_amp_seq(len_seq, type_filter):
     if type_filter == 'square':
-        amp_seq0 = np.ones(len_seq) * 0.003
+        amp_seq0 = np.ones(len_seq) / len_seq
     elif type_filter == 'triangle':
         amp_seq1 = np.linspace(0, 1, len_seq//2)
         amp_seq2 = np.linspace(1, 0, len_seq//2)
         if len_seq % 2 == 1:
             amp_seq2 = np.insert(amp_seq2, 0, 1+amp_seq1[1])
-        amp_seq0 = np.hstack((amp_seq1, amp_seq2)) * 0.003
+        amp_seq0 = np.hstack((amp_seq1, amp_seq2)) / len_seq * 2
     else:
         print('非法字符，请检查type_filter')
         amp_seq0 = None
@@ -167,21 +170,42 @@ def error(expected_gain_sam, brian_measure_sam):
     return error_brian
 
 
+def awgn(x, snr):
+    snr = 10 ** (snr / 10.0)
+    xpower = np.sum(x ** 2) / len(x)
+    npower = xpower / snr
+    return x + np.random.randn(len(x)) * np.sqrt(npower)
+
+def awgn_filter(x, window_size):
+    length = x.size - window_size
+    y = x
+    for i in range(length):
+        y[i] = np.sum(x[i:i+window_size])/window_size
+    z = y
+    for i in np.invert(range(length)):
+        z[i+window_size] = np.sum(y[i:i+window_size])/window_size
+    return z
+
 if __name__ == '__main__':
     '''参数设置'''
-    N_pump = 15  # 梳齿个数；对称：奇数
-    df = 6  # MHz
-    gamma_B = 15  # 布里渊线宽，单位MHz
+    N_pump = 60  # 梳齿个数；对称：奇数
+    df = 5  # MHz
+    gamma_B = 10  # 布里渊线宽，单位MHz
     central_freq = 3.3 * 10 ** 3  # 泵浦中心频率（MHz）
     BFS = 0  # 布里渊频移（MHz），同时观察梳齿与增益关系时置零
     type_filter = 'square'  # type_filter='square','triangle'
     N_iteration = 5  # 迭代次数
-    alpha = 0.003  # 迭代系数--和平均梳齿幅值相同
+    iteration_type = 1  # 迭代方式，1-2+3，2-线性，3-根号
+    alpha = 1/N_pump  # 迭代系数--和平均梳齿幅值相同
+    snr = 23  # 倍数，非db
 
     '''初始化频梳幅值与频率'''
     amp_seq = initial_amp_seq(N_pump, type_filter)
     f_seq = initial_f_seq(N_pump, central_freq, df)
 
+    # 改边界间隔
+    # f_seq[0] = f_seq[0]-df/4*3
+    # f_seq[-1] = f_seq[-1]+df/4*3
     print('f_seq:', f_seq)
 
     # amp_seq[6] = 1.7
@@ -194,10 +218,11 @@ if __name__ == '__main__':
     print('amp_seq:', amp_seq)
 
     '''测量增益谱并作图与泵浦比较'''
-    f_measure = np.linspace(3.2*10**3, 4.0*10**3, 20000)  # 扫频范围，单位MHz
-    plt.xlim(3200, 3400)  # 横坐标范围
+    f_measure = np.linspace(3.1*10**3, 4.0*10**3, 20000)  # 扫频范围，单位MHz
+    plt.xlim(3100, 3500)  # 横坐标范围
 
     measure_brian = add_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
+    measure_brian = awgn(measure_brian, snr)  # 加噪声
     plt.plot(f_measure, measure_brian, label='反馈前'+type_filter)  # 画总增益谱
     plt.bar(f_seq, amp_seq / amp_seq.max() * measure_brian.max()/2, label='反馈前泵浦', width=1.1, color="k")  # 画频移后泵浦梳齿
 
@@ -208,6 +233,8 @@ if __name__ == '__main__':
     # plt.plot(f_measure, real_lorenz, label='宽谱' )  # 画增益谱
     # plt.plot(f_measure, arg_lorenz, label='相位' )  # 画相位
     measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)
+    measure_brian = awgn(measure_brian, snr)
+    measure_brian = awgn_filter(measure_brian, 80)  # 滤波
     plt.plot(f_measure, measure_brian.real, label='宽谱卷积' + type_filter)
     # plt.plot(f_measure, measure_brian.imag, label='宽谱相位' + type_filter)
 
@@ -254,23 +281,38 @@ if __name__ == '__main__':
         print('error_brian_seq:', error_brian_seq)
 
         # 更新amp_seq，目前有三种方式
-        # 方式1
-        # amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
-        # amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
-        # amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
-        # 方式2
-        # amp_seq = np.sqrt(expected_gain_sam / brian_measure_sam) * amp_seq  # （3-7）-->边界收敛不一致
-        # 方式3
-        amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正
+        if iteration_type == 1:  # 方式1：2+3
+            amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
+            amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
+            amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+        elif iteration_type == 2:  # 方式2：线性
+            amp_seq = np.sqrt(expected_gain_sam / brian_measure_sam) * amp_seq  # （3-7）-->边界收敛不一致
+        elif iteration_type == 3:  # 方式3：加根号
+            amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正
+        elif iteration_type == 4:  # 方式4：边界参考旁边
+            amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+            amp_seq[-1] = amp_seq[-2]
+            amp_seq[0] = amp_seq[1]
 
         # amp_seq = (amp_seq - min(amp_seq)) / (max(amp_seq)-min(amp_seq))
         measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
+        measure_brian = awgn(measure_brian, snr)
+        measure_brian = awgn_filter(measure_brian, 80)  # 滤波
 
+    # -------------反馈后边界修正-------------------
+    amp_seq[-1] = amp_seq[-2]
+    f_seq[-1] = f_seq[-1]+df/4*3
+    amp_seq[0] = amp_seq[1]
+    measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
+    # measure_brian = awgn(measure_brian, snr)
+    # measure_brian = awgn_filter(measure_brian, 80)  # 滤波
+
+    # ------------画图-----------------------------
     plt.plot(f_measure, measure_brian.real, label='迭代' + str(N_iteration) + '次幅值', color='g')
-    plt.plot(f_measure, measure_brian.imag, label='迭代' + str(N_iteration) + '次相位', color='g')
+    # plt.plot(f_measure, measure_brian.imag, label='迭代' + str(N_iteration) + '次相位', color='g')
 
-    plt.bar(f_seq, amp_seq / amp_seq.max() * brian_measure_sam.max() / 2, label='反馈后泵浦', width=1.1,
-            color="red")  # 画频移后泵浦梳齿
+    # plt.bar(f_seq, amp_seq / amp_seq.max() * brian_measure_sam.max() / 2, label='反馈后泵浦', width=1.1,
+    #         color="red")  # 画频移后泵浦梳齿
 
     plt.title('梳齿数:' + str(N_pump) + '；间隔:' + str(df) + 'MHz；线宽:' + str(gamma_B) + 'MHz')
 

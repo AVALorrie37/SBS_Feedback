@@ -10,16 +10,17 @@ mpl.rcParams['font.sans-serif'] = ['SimHei']
 mpl.rcParams['font.serif'] = ['KaiTi']
 mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显示为方块的问题,或者转换负号为字符串
 
-N_fft = 159960  # 时域采样个数
+# # 参数设置
+N_fft = 159960    # 时域采样个数
 N_AWG = 159960
 fs = 80 * 10 ** 9  # AWG采样频率
 fs_GHZ = fs / 10 ** 9
 # design_pump = np.loadtxt('D:\\desktop\\AWG_cos_Square10.5GHz100.0MHz.txt')
-design_pump_f = pd.read_csv('D:\\Documents\\项目\\1121部分实验结果\\C4--0--00000.csv', skiprows=2, nrows=159960)
+design_pump_f = pd.read_csv('D:\\Documents\\OneDrive\\项目\\1121部分实验结果\\C4--0--00000.csv', skiprows=2, nrows=159960)
 design_pump = design_pump_f["Ampl"]
 # design_pump = pd.read_table('D:\\Documents\\项目\\1013设计数据\\非等间隔\\AWG_cos_square16G150MHz.txt', sep='\n', header=None, nrows=N_AWG)
-# result_data = pd.read_csv('D:\\Documents\\项目\\1013实验数据\\1013YAP\\SQUARE16G120MSMOOTHING.csv', skiprows=6, nrows=20000)
-result_data_f = pd.read_csv('D:\\Documents\\项目\\1121部分实验结果\\F1--0--00000.csv', skiprows=2, nrows=666)
+# result_data = pd.read_csv('D:\\Documents\\OneDrive\\项目\\1013实验数据\\1013YAP\\SQUARE16G120MSMOOTHING.csv', skiprows=6, nrows=20000)
+result_data_f = pd.read_csv('D:\\Documents\\OneDrive\\项目\\1121部分实验结果\\F1--0--00000.csv', skiprows=2, nrows=666)
 result_data = result_data_f["Ampl"]
 
 # design_pump = np.round(design_pump,1)  # 加入量化误差
