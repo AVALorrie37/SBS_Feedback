@@ -126,14 +126,16 @@ if __name__ == '__main__':
     t_AWG = N_AWG * (1 / AWG_framerate)
     ts = np.linspace(0, t_AWG, N_AWG, endpoint=False)
     f_list, amp_list, phase_list = sd.square_filter(center_F=15 * 10 ** 9, bandwidth=60 * 10 ** 6, df=10 * 10 ** 6)
-    print('amp_list =', amp_list)
+    # f_list, amp_list, phase_list = sd.triangle_filter(center_F=15 * 10 ** 9, bandwidth=200 * 10 ** 6, df=10 * 10 ** 6)
     f_list = np.array(f_list)
     print('f_list =', f_list)
+    amp_list = np.array(amp_list)
+    print('amp_list =', amp_list)
     freq_measure = np.array(csvframe2['Freq(Hz)'])
     amp_measure = csvframe2_3_mag
 
     bfs = loc.bfs_correct(f_list/1e6, freq_measure/1e6, amp_measure, 30)  # 单位MHz
-    # bfs = 10.827e3
+    bfs = 10.833e3
     print('BFS =', bfs)
 
     freq_design_seq = f_list - bfs*1e6
@@ -143,20 +145,29 @@ if __name__ == '__main__':
     f_index = mlt.search_index(freq_design_seq, freq_measure)
 
     '''离线反馈'''
-    N_iteration = 50
+    N_iteration = 7
     for _ in range(N_iteration):
         amp_measure = corre_filter(amp_measure, gamma_B=30/f_resolution)
         expected_amp_sam = mlt.expected_gain2(f_index, amp_measure, 'square')
         amp_measure_sam = np.array([amp_measure[i] for i in f_index])  # 最接近频梳频率的采样点增益
+        # print('amp_measure_sam =', amp_measure_sam)
+        print('expected_amp_sam =', expected_amp_sam)
         amp_design_seq = np.sqrt(expected_amp_sam / amp_measure_sam) * amp_design_seq  # （3-7）-->边界收敛不一致
+
+        alpha = np.mean(amp_design_seq)
+        amp_design_seq[0] = np.sqrt(alpha * expected_amp_sam[0] / amp_measure_sam[0] * amp_design_seq[0])
+        amp_design_seq[-1] = np.sqrt(alpha * expected_amp_sam[-1] / amp_measure_sam[-1] * amp_design_seq[-1])
+        amp_design_seq[1:-1] = np.sqrt(expected_amp_sam[1:-1] / amp_measure_sam[1:-1]) * amp_design_seq[1:-1]
 
         print('amp_design_seq =', amp_design_seq)
         # ys = sd.synthesize1(amp_design_seq_new, f_list, ts, phase_list)
         # wavefile = (ys - min(ys)) / (max(ys) - min(ys)) - 0.5
 
-        measure_brian = mlt.conv_lorenz(freq_measure/1e6, amp_design_seq, f_list/1e6, gamma_b=26.7, BFS=10.8270875e3).real  # 单位MHz
+        nml_amp_seq = mlt.normalize_amp_seq(amp_design_seq, f_list/1e6, phase_list)
+
+        measure_brian = 0.025 * mlt.conv_lorenz(freq_measure/1e6, nml_amp_seq, f_list/1e6, gamma_b=26.7, BFS=10833).real  # 单位MHz
         index_max = measure_brian.argmax()
-        measure_brian = measure_brian / measure_brian.max() * abs(np.mean(amp_measure[index_max - 5:index_max + 5]))
+        measure_brian = measure_brian / measure_brian.max() * abs(np.mean(csvframe2_3_mag[index_max - 5:index_max + 5]))
         # measure_brian = measure_brian / measure_brian.max() * abs(np.mean(amp_measure[index_max - 5:index_max + 5]))*0.147 -43.7
 
         amp_measure = mlt.awgn(measure_brian, snr=30)  # snr = 53

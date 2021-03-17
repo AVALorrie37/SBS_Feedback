@@ -13,8 +13,8 @@ mpl.rcParams['font.serif'] = ['KaiTi']
 mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显示为方块的问题,或者转换负号为字符串
 
 
-def get_fft_amp(TD_N, fs=80e3):
-    # FFT求单边频谱及对应幅值，TD_N为时域采样点，fs为采样频率(MHz)
+def get_fft_ap(TD_N, fs=80e3):
+    # FFT求单边频谱及对应幅值和相位，TD_N为时域采样点，fs为采样频率(MHz)(未完成)
     N_fft = TD_N.size
 
     fft_y = fft(TD_N)[range(int(N_fft / 2))]
@@ -30,8 +30,9 @@ def get_fft_amp(TD_N, fs=80e3):
     # plt.ylabel("A归一化")
     plt.subplot(2, 1, 2)
     plt.plot(range(result_data.size), result_data, 'b')  # 以频率为横坐标
-    amp_seq=None
-    return amp_seq
+    amp_seq = None
+    phase_seq = None
+    return amp_seq, phase_seq
 
 # # 参数设置
 N_fft = 64000    # 时域采样个数
@@ -53,26 +54,32 @@ fft_N = np.arange(N_fft)
 TD_N = [design_pump[i % N_AWG] for i in fft_N]  # 循环补数据
 # TD_N = [design_pump.values[i % N_AWG] for i in fft_N]  # 循环补数据
 
-# copy自师兄代码，检查AWG归一化前后数据
+# copy自师兄代码，检查AWG归一化前后数据(结论：该归一化不会引入直流分量(-0.5时))
 no_normal = True
+# no_normal = False
 if no_normal:
     AWG_framerate = 64 * 10 ** 9  # AWG采样率
     Df = 1 * 10 ** 6
     N_AWG = int(AWG_framerate / Df)
     t_AWG = N_AWG * (1 / AWG_framerate)
+    print('t_AWG :', t_AWG)
     center_F = 14 * 10 ** 9
     bandwidth = 200 * 10 ** 6
     df = 15 * 10 ** 6
     f_list, amp_list, phase_list = sd.square_filter(center_F, bandwidth, df)
-    # f_list, amp_list, phase_list = SBS_DSP.triangle_filter(center_F, bandwidth, df)
+    # f_list, amp_list, phase_list = sd.triangle_filter(center_F, bandwidth, df)
 
     # amp_list=FBFunction(amp_list)
+    # amp_list[3]=2
+    # amp_list[5] = 1.5
     # f_list=FList(f_list)
 
     ts = np.linspace(0, t_AWG, N_AWG, endpoint=False)
     ys = sd.synthesize1(amp_list, f_list, ts, phase_list)
-    print(f_list)
+    print('f_list :', f_list)
     wavefile = (ys - min(ys)) / (max(ys) - min(ys)) - 0.5
+    print('理论梳齿最值：', max(amp_list) / (max(ys) - min(ys)))
+    # wavefile = ys
     TD_N = wavefile
 
 # 去掉直流分量
@@ -98,6 +105,7 @@ half_hz = half_fft_N / N_fft * fs_GHZ
 # plt.xlim(15.925,16.1)
 # plt.xlim(11.2, 11.5)
 plt.xlim(13.8, 14.2)
+print('fft得梳齿最值：', max(normalization_half_y))
 plt.plot(half_hz, normalization_half_y, 'b')  #以频率为横坐标
 plt.title('单边频谱(归一化)', fontsize=9, color='blue')
 plt.xlabel("F（GHz）")

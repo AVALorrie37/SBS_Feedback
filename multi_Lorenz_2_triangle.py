@@ -61,7 +61,7 @@ def complex_lorenz(omega, omega_B, gamma_B):
 
 def initial_amp_seq(len_seq, type_filter):
     if type_filter == 'square':
-        amp_seq0 = np.ones(len_seq) / len_seq
+        amp_seq0 = np.ones(len_seq)
     elif type_filter == 'triangle':
         amp_seq1 = np.linspace(0, 1, len_seq // 2)
         amp_seq2 = np.linspace(1, 0, len_seq // 2)
@@ -84,13 +84,12 @@ def initial_f_seq(len_seq, central_freq, df):
     return f_seq
 
 
-def normalize_amp_seq(amp_seq, f_seq):
-    phase_list = [sd.randen_phase() for i in range(f_seq.size)]  # 随机相位
-    ts = np.linspace(0, t_AWG=1.e-6, N_AWG=64000, endpoint=False)
-    ys = sd.synthesize1(amp_seq, f_seq, ts, phase_list)
-    wavefile = (ys - min(ys)) / (max(ys) - min(ys)) - 0.5
-
-    return None
+def normalize_amp_seq(amp_seq, f_seq, phase_list):
+    # f_seq单位MHz
+    ts = np.linspace(0, 1.e-6, 64000, endpoint=False)
+    ys = sd.synthesize1(amp_seq, f_seq*1e6, ts, phase_list)
+    amp_seq = amp_seq / (max(ys) - min(ys))
+    return amp_seq
 
 
 def add_lorenz(x, amp_seq, f_seq, gamma_b, BFS):
@@ -173,7 +172,7 @@ def expected_gain2(f_index, measure_brian, type_filter):
         # expected_gain_sam = np.ones(len_seq) * mean_measure_brian
         expected_gain_sam = np.ones(len_seq) * np.mean(measure_brian[f_index[0]:f_index[-1]])
     elif type_filter == 'triangle':
-        mb_min = np.min(measure_brian)
+        mb_min = max(np.min(measure_brian), 0)
         mb_max = np.max(measure_brian)
         if len_seq % 2 == 0:
             expected_seq1 = np.linspace(mb_min, mb_max, len_seq // 2)
@@ -216,16 +215,16 @@ def awgn_filter(x, window_size):
 
 if __name__ == '__main__':
     '''参数设置'''
-    N_pump = 5  # 梳齿个数；对称：奇数
-    df = 15  # MHz
+    N_pump = 10  # 梳齿个数；对称：奇数
+    df = 10  # MHz
     gamma_B = 30  # 布里渊线宽，单位MHz
     central_freq = 3.3 * 10 ** 3  # 泵浦中心频率（MHz）
     BFS = 0  # 布里渊频移（MHz），同时观察梳齿与增益关系时置零
     # BFS = 5#*np.random.randn(1)  # 布里渊频移（MHz），同时观察梳齿与增益关系时置零
     type_filter = 'square'  # type_filter='square','triangle'
-    N_iteration = 10  # 迭代次数
+    N_iteration = 5  # 迭代次数
     iteration_type = 1  # 迭代方式，1-2+3，2-线性，3-根号,4-边界参考旁边
-    alpha = 1 / N_pump  # 迭代系数--和平均梳齿幅值相同
+    alpha = 1  # 迭代系数--和平均梳齿幅值相同
     snr = 23  # 倍数，非db
 
     '''初始化频梳幅值与频率'''
@@ -248,12 +247,19 @@ if __name__ == '__main__':
     # amp_seq = amp_seq / amp_seq_sum
     print('amp_seq:', amp_seq)
 
+    '''加入随机相位并归一化梳齿幅值'''
+    phase_list = [sd.randen_phase() for i in range(N_pump)]  # 随机相位
+    phase_list = np.zeros(N_pump)
+    # phase_list[3]=np.pi
+    nml_amp_seq = normalize_amp_seq(amp_seq, f_seq, phase_list)
+    print('nml_amp_seq:', nml_amp_seq)
+
     '''测量增益谱并作图与泵浦比较'''
     f_measure = np.linspace(3.1 * 10 ** 3, 3.5 * 10 ** 3, 20000)  # 扫频范围，单位MHz
     # f_measure = np.linspace(3.1 * 10 ** 3, 4.0 * 10 ** 3, 20000)  # 扫频范围，单位MHz
     # plt.xlim(3250, 3350)  # 横坐标范围
 
-    measure_brian = add_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
+    measure_brian = add_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
     measure_brian = awgn(measure_brian, snr)  # 加噪声
     plt.plot(f_measure, measure_brian, label='反馈前' + type_filter)  # 画总增益谱
     plt.bar(f_seq, amp_seq / amp_seq.max() * measure_brian.max() / 2, label='反馈前泵浦', width=1.1, color="k")  # 画频移后泵浦梳齿
@@ -272,7 +278,7 @@ if __name__ == '__main__':
         # arg_lorenz = np.arctan(imag_lorenz/real_lorenz)
         # plt.plot(f_measure, real_lorenz, label='宽谱' )  # 画增益谱
         # plt.plot(f_measure, arg_lorenz, label='相位' )  # 画相位
-        measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)
+        measure_brian = conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)
         measure_brian = awgn(measure_brian, snr)
         measure_brian = awgn_filter(measure_brian, 80)  # 滤波
         plt.plot(f_measure, measure_brian.real, label='宽谱卷积' + type_filter)
@@ -329,6 +335,8 @@ if __name__ == '__main__':
             # print('error_brian_seq:', error_brian_seq)
 
             # 更新amp_seq，目前有三种方式
+            alpha = np.mean(amp_seq)
+            print('alpha： ', alpha)
             if iteration_type == 1:  # 方式1：2+3
                 amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
                 amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
@@ -342,8 +350,10 @@ if __name__ == '__main__':
                 amp_seq[-1] = amp_seq[-2]
                 amp_seq[0] = amp_seq[1]
 
-            # amp_seq = (amp_seq - min(amp_seq)) / (max(amp_seq)-min(amp_seq))
-            measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
+            print('amp_seq:', amp_seq)
+
+            nml_amp_seq = normalize_amp_seq(amp_seq, f_seq, phase_list)
+            measure_brian = conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
             # measure_brian = awgn(measure_brian, snr)  # 加噪
             # measure_brian = awgn_filter(measure_brian, 80)  # 滤波
 
@@ -359,7 +369,7 @@ if __name__ == '__main__':
         f_seq[-1] = f_seq[-2] + gamma_B/2
         f_seq[0] = f_seq[1] - gamma_B/2
         # amp_seq[0] = np.sqrt(amp_seq[1]*amp_seq[0])
-        measure_brian = conv_lorenz(f_measure, amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
+        measure_brian = conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
         # measure_brian = awgn(measure_brian, snr)
         # measure_brian = awgn_filter(measure_brian, 80)  # 滤波
 
