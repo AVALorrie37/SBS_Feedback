@@ -146,18 +146,20 @@ def gmmb_correct(f_measure, measure_m):
     m_resolution = abs(measure_m[1] - measure_m[0])
     print(m_resolution+1)
     max_m = np.max(measure_m)
+    max_m_index = np.argmax(measure_m)
     print(max_m)
     m_3db = max_m - 3  # 3db 幅值
-    i = 0
-    m_index = []
+    left_indexes = []
+    right_indexes = []
     for j in range(measure_m.size):
         if abs(measure_m[j] - m_3db) < 0.51*m_resolution:
-            m_index.append(j)
-            print(i)
-            i += 1
-        if i == 2:
-            break
-    gamma_b = f_measure[m_index[1]] - f_measure[m_index[0]]
+            if j < max_m_index:
+                left_indexes.append(j)
+            else:
+                right_indexes.append(j)
+    left_index = int(np.median(left_indexes))
+    right_index = int(np.median(right_indexes))
+    gamma_b = f_measure[right_index] - f_measure[left_index]
     return gamma_b
 
 
