@@ -133,6 +133,7 @@ if __name__ == '__main__':
     print('amp_list =', amp_list)
     freq_measure = np.array(csvframe2['Freq(Hz)'])
     amp_measure = csvframe2_3_mag
+    print('gamma-B：', mlt.gmmb_correct(freq_measure/1e6, amp_measure))  # 3db带宽？
 
     bfs = loc.bfs_correct(f_list/1e6, freq_measure/1e6, amp_measure, 30)  # 单位MHz
     bfs = 10.833e3
