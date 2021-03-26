@@ -49,7 +49,7 @@ if __name__ == '__main__':
     elif mode_type == "auto_mode":
         # TODO: auto mode (automatically stop loop when meets need)
         ''' [1] input initial settings (set requirements of filter) '''
-        bandwidth = 18  # MHz
+        bandwidth = 0  # MHz
         comb_df = 3  # MHz
         iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
         gamma_B = 9  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
         ''' [2] check and preprocess '''
         assert bandwidth % comb_df == 0
-        N_pump = int(bandwidth / comb_df)
+        N_pump = int(bandwidth / comb_df)+1
         central_freq = 0  # 因为只要确定形状，故此处中心频率采用相对值，设置为0
         BFS = 0  # 因为只要确定形状，故不考虑布里渊频移，设置为0
 
@@ -69,7 +69,8 @@ if __name__ == '__main__':
         nml_amp_seq = mlt.normalize_amp_seq(amp_seq, f_seq, phase_list)  # 归一化后泵浦
 
         ''' [2-2] 计算增益谱 '''
-        f_measure = np.linspace(central_freq - bandwidth, central_freq + bandwidth, 20000)  # 设置扫频范围与点数，单位MHz
+        window_width = max([bandwidth, gamma_B])
+        f_measure = np.linspace(central_freq - window_width, central_freq + window_width, 40000)  # 设置扫频范围与点数，单位MHz
         measure_brian = mlt.conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)
 
         ''' [3] 迭代反馈,当平整度增加时停止迭代 '''

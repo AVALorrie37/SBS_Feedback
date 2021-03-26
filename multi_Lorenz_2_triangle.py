@@ -87,9 +87,10 @@ def initial_f_seq(len_seq, central_freq, df):
 
 def normalize_amp_seq(amp_seq, f_seq, phase_list):
     # f_seq单位MHz
-    ts = np.linspace(0, 1.e-6, 64000, endpoint=False)
-    ys = sd.synthesize1(amp_seq, f_seq*1e6, ts, phase_list)
-    amp_seq = amp_seq / (max(ys) - min(ys))
+    if len(amp_seq) > 1:
+        ts = np.linspace(0, 1.e-6, 64000, endpoint=False)
+        ys = sd.synthesize1(amp_seq, f_seq*1e6, ts, phase_list)
+        amp_seq = amp_seq / (max(ys) - min(ys))
     return amp_seq
 
 
@@ -140,6 +141,26 @@ def bfs_correct(f_seq, f_measure, measure_brian, bfs):
     return bfs
 
 
+def gmmb_correct(f_measure, measure_m):
+    # 功能：根据测量数据计算线宽
+    m_resolution = abs(measure_m[1] - measure_m[0])
+    print(m_resolution+1)
+    max_m = np.max(measure_m)
+    print(max_m)
+    m_3db = max_m - 3  # 3db 幅值
+    # i = int(0)
+    m_index = []
+    for j in range(measure_m.size):
+        if abs(measure_m[j] - m_3db) < m_resolution:
+            m_index.append(j)
+            # print(i)
+        #     i += 1
+        # if i == 2:
+        #     break
+    gamma_b = f_measure[m_index[1]] - f_measure[m_index[0]]
+    return gamma_b
+
+
 def expected_gain(brian_measure_sam, type_filter):
     # 3db带宽范围：fmax - fmin + FWHM（半峰全宽）
     # 简化版：只算泵浦对应位置
@@ -168,43 +189,48 @@ def expected_gain2(f_index, measure_brian, type_filter):
     # 2版：均值取fmax - fmin范围内，最后算泵浦对应位置
     len_seq = f_index.size
     brian_measure_sam = np.array([measure_brian[i] for i in f_index])  # 最接近频梳频率的采样点增益
-
-    if type_filter == 'square':
-        # expected_gain_sam = np.ones(len_seq) * mean_measure_brian
-        expected_gain_sam = np.ones(len_seq) * np.mean(measure_brian[f_index[0]:f_index[-1]])
-    elif type_filter == 'triangle':
-        mb_min = max(np.min(measure_brian), 0)
-        mb_max = np.max(measure_brian)
-        if len_seq % 2 == 0:
-            expected_seq1 = np.linspace(mb_min, mb_max, len_seq // 2)
-            expected_seq2 = np.linspace(mb_max, mb_min, len_seq // 2)
+    if len_seq >1:
+        if type_filter == 'square':
+            # expected_gain_sam = np.ones(len_seq) * mean_measure_brian
+            expected_gain_sam = np.ones(len_seq) * np.mean(measure_brian[f_index[0]:f_index[-1]])
+        elif type_filter == 'triangle':
+            mb_min = max(np.min(measure_brian), 0)
+            mb_max = np.max(measure_brian)
+            if len_seq % 2 == 0:
+                expected_seq1 = np.linspace(mb_min, mb_max, len_seq // 2)
+                expected_seq2 = np.linspace(mb_max, mb_min, len_seq // 2)
+            else:
+                expected_seq1 = np.linspace(mb_min, mb_max, len_seq // 2 + 1)
+                expected_seq2 = np.linspace(mb_max, mb_min, len_seq // 2 + 1)
+                expected_seq2 = np.delete(expected_seq2, 0)
+            expected_gain_sam = np.hstack((expected_seq1, expected_seq2))
         else:
-            expected_seq1 = np.linspace(mb_min, mb_max, len_seq // 2 + 1)
-            expected_seq2 = np.linspace(mb_max, mb_min, len_seq // 2 + 1)
-            expected_seq2 = np.delete(expected_seq2, 0)
-        expected_gain_sam = np.hstack((expected_seq1, expected_seq2))
+            print('非法字符，请检查type_filter')
+            expected_gain_sam = None
     else:
-        print('非法字符，请检查type_filter')
-        expected_gain_sam = None
+        expected_gain_sam = np.max(measure_brian)
     return expected_gain_sam
 
 
 def change_amp_seq(amp_seq, expected_gain_sam, brian_measure_sam, iteration_type=1):
     # 功能：更新amp_seq；
     # iteration_type-更新方式：[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
-    alpha = np.mean(amp_seq)
-    if iteration_type == 1:  # 方式1：2+3
-        amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
-        amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
-        amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
-    elif iteration_type == 2:  # 方式2：线性
-        amp_seq = np.sqrt(expected_gain_sam / brian_measure_sam) * amp_seq  # （3-7）-->边界收敛不一致
-    elif iteration_type == 3:  # 方式3：加根号
-        amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正
-    elif iteration_type == 4:  # 方式4：边界参考旁边
-        amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
-        amp_seq[-1] = amp_seq[-2]
-        amp_seq[0] = amp_seq[1]
+    if len(amp_seq) > 1:
+        alpha = np.mean(amp_seq)
+        if iteration_type == 1:  # 方式1：2+3
+            amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
+            amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
+            amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+        elif iteration_type == 2:  # 方式2：线性
+            amp_seq = np.sqrt(expected_gain_sam / brian_measure_sam) * amp_seq  # （3-7）-->边界收敛不一致
+        elif iteration_type == 3:  # 方式3：加根号
+            amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正
+        elif iteration_type == 4:  # 方式4：边界参考旁边
+            amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+            amp_seq[-1] = amp_seq[-2]
+            amp_seq[0] = amp_seq[1]
+    else:
+        pass
     return amp_seq
 
 
@@ -235,7 +261,7 @@ def awgn_filter(x, window_size):
 
 if __name__ == '__main__':
     '''参数设置'''
-    N_pump = 10  # 梳齿个数；对称：奇数
+    N_pump = 1  # 梳齿个数；对称：奇数
     df = 10  # MHz
     gamma_B = 30  # 布里渊线宽，单位MHz
     central_freq = 3.3 * 10 ** 3  # 泵浦中心频率（MHz）
@@ -275,8 +301,8 @@ if __name__ == '__main__':
     print('nml_amp_seq:', nml_amp_seq)
 
     '''测量增益谱并作图与泵浦比较'''
-    bandwidth = N_pump * df
-    f_measure = np.linspace(central_freq-bandwidth, central_freq+bandwidth, 20000)  # 扫频范围，单位MHz
+    window_width = N_pump * df + gamma_B
+    f_measure = np.linspace(central_freq-window_width, central_freq+window_width, 40000)  # 扫频范围，单位MHz
     # f_measure = np.linspace(3.1 * 10 ** 3, 4.0 * 10 ** 3, 20000)  # 扫频范围，单位MHz
     # plt.xlim(3250, 3350)  # 横坐标范围
 
