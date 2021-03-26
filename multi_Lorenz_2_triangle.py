@@ -18,6 +18,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from math import pi
 import SBS_DSP as sd
+import numba as nb
 import time
 
 # # 解决字体显示问题
@@ -188,6 +189,25 @@ def expected_gain2(f_index, measure_brian, type_filter):
     return expected_gain_sam
 
 
+def change_amp_seq(amp_seq, expected_gain_sam, brian_measure_sam, iteration_type=1):
+    # 功能：更新amp_seq；
+    # iteration_type-更新方式：[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
+    alpha = np.mean(amp_seq)
+    if iteration_type == 1:  # 方式1：2+3
+        amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
+        amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
+        amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+    elif iteration_type == 2:  # 方式2：线性
+        amp_seq = np.sqrt(expected_gain_sam / brian_measure_sam) * amp_seq  # （3-7）-->边界收敛不一致
+    elif iteration_type == 3:  # 方式3：加根号
+        amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正
+    elif iteration_type == 4:  # 方式4：边界参考旁边
+        amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
+        amp_seq[-1] = amp_seq[-2]
+        amp_seq[0] = amp_seq[1]
+    return amp_seq
+
+
 def error(expected_gain_sam, brian_measure_sam):
     # 简化版：只算泵浦对应位置
     error_brian_seq = expected_gain_sam - brian_measure_sam
@@ -223,7 +243,7 @@ if __name__ == '__main__':
     # BFS = 5#*np.random.randn(1)  # 布里渊频移（MHz），同时观察梳齿与增益关系时置零
     type_filter = 'square'  # type_filter='square','triangle'
     N_iteration = 5  # 迭代次数
-    iteration_type = 1  # 迭代方式，1-2+3，2-线性，3-根号,4-边界参考旁边
+    iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边
     alpha = 1  # 迭代系数--和平均梳齿幅值相同
     snr = 23  # 倍数，非db
 
@@ -255,7 +275,8 @@ if __name__ == '__main__':
     print('nml_amp_seq:', nml_amp_seq)
 
     '''测量增益谱并作图与泵浦比较'''
-    f_measure = np.linspace(3.1 * 10 ** 3, 3.5 * 10 ** 3, 20000)  # 扫频范围，单位MHz
+    bandwidth = N_pump * df
+    f_measure = np.linspace(central_freq-bandwidth, central_freq+bandwidth, 20000)  # 扫频范围，单位MHz
     # f_measure = np.linspace(3.1 * 10 ** 3, 4.0 * 10 ** 3, 20000)  # 扫频范围，单位MHz
     # plt.xlim(3250, 3350)  # 横坐标范围
 
@@ -335,22 +356,8 @@ if __name__ == '__main__':
             # print('error_brian_seq:', error_brian_seq)
 
             # 更新amp_seq，目前有三种方式
-            alpha = np.mean(amp_seq)
-            print('alpha： ', alpha)
-            if iteration_type == 1:  # 方式1：2+3
-                amp_seq[0] = np.sqrt(alpha * expected_gain_sam[0] / brian_measure_sam[0] * amp_seq[0])
-                amp_seq[-1] = np.sqrt(alpha * expected_gain_sam[-1] / brian_measure_sam[-1] * amp_seq[-1])
-                amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
-            elif iteration_type == 2:  # 方式2：线性
-                amp_seq = np.sqrt(expected_gain_sam / brian_measure_sam) * amp_seq  # （3-7）-->边界收敛不一致
-            elif iteration_type == 3:  # 方式3：加根号
-                amp_seq = np.sqrt(alpha * expected_gain_sam / brian_measure_sam * amp_seq)  # （3-8）修正
-            elif iteration_type == 4:  # 方式4：边界参考旁边
-                amp_seq[1:-1] = np.sqrt(expected_gain_sam[1:-1] / brian_measure_sam[1:-1]) * amp_seq[1:-1]
-                amp_seq[-1] = amp_seq[-2]
-                amp_seq[0] = amp_seq[1]
-
-            print('amp_seq:', amp_seq)
+            amp_seq = change_amp_seq(amp_seq, expected_gain_sam, brian_measure_sam, iteration_type)
+            print(amp_seq)
 
             nml_amp_seq = normalize_amp_seq(amp_seq, f_seq, phase_list)
             measure_brian = conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
