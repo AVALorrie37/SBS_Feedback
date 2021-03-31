@@ -49,8 +49,8 @@ if __name__ == '__main__':
     elif mode_type == "auto_mode":
         # TODO: auto mode (automatically stop loop when meets need)
         ''' [1] input initial settings (set requirements of filter) '''
-        bandwidth = 0  # MHz
-        comb_df = 3  # MHz
+        bandwidth = 32  # MHz
+        comb_df = 4  # MHz
         iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
         gamma_B = 9  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
         type_filter = 'square'  # type_filter='square','triangle'
@@ -79,9 +79,13 @@ if __name__ == '__main__':
         f_measure_sam = [f_measure[i] for i in f_index]  # 最接近频梳对应的单布里渊增益中心的采样点频率
         brian_measure_sam = np.array([measure_brian.real[i] for i in f_index])  # 最接近频梳频率的采样点增益
         expected_gain_sam = mlt.expected_gain2(f_index, measure_brian.real, type_filter)
-        bias = abs(measure_brian[f_index[0]:f_index[-1]] - np.mean(expected_gain_sam))
-        flatness = (max(bias) - min(bias))
-        while N_iteration < 50:
+        measure_max = measure_brian.real.max()
+        normal_measure_brian = measure_brian.real / measure_max
+        mean_normal_expected = np.mean(expected_gain_sam) / measure_max
+        bias = abs(normal_measure_brian[f_index[0]:f_index[-1]] - mean_normal_expected)
+        flatness = min(bias)/max(bias)
+
+        while N_iteration < 10:
             # 更新amp_seq，目前有4种方式
             new_amp_seq = mlt.change_amp_seq(amp_seq, expected_gain_sam, brian_measure_sam, iteration_type)
             nml_amp_seq = mlt.normalize_amp_seq(amp_seq, f_seq, phase_list)
@@ -91,12 +95,15 @@ if __name__ == '__main__':
             brian_measure_sam = np.array([new_measure_brian.real[i] for i in f_index])  # 最接近频梳频率的采样点增益
             expected_gain_sam = mlt.expected_gain2(f_index, new_measure_brian.real, type_filter)
 
-            bias = abs(new_measure_brian[f_index[0]:f_index[-1]] - np.mean(expected_gain_sam))
-            new_flatness = (max(bias) - min(bias))
+            measure_max = np.max(new_measure_brian.real)
+            normal_measure_brian = new_measure_brian.real / measure_max
+            mean_normal_expected = np.mean(expected_gain_sam) / measure_max
+            bias = abs(normal_measure_brian[f_index[0]:f_index[-1]] - mean_normal_expected)
+            new_flatness = min(bias)/max(bias)
             if new_flatness >= flatness:
                 break
 
-            if N_iteration % 10 == 0:
+            if N_iteration % 1 == 0:
                 plt.plot(f_measure, measure_brian.real, label='迭代' + str(N_iteration) + '次幅值')
 
             amp_seq = new_amp_seq
