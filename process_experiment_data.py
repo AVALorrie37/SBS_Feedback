@@ -54,8 +54,10 @@ def corre_filter(measure_brian, gamma_B):
 
 if __name__ == '__main__':
     '''计算开关增益'''
-    csvframe2 = pd.read_csv('D:\\Documents\\项目\\210121\\FIBER\\15BW60_10_2.csv', skiprows=6, nrows=20000)
-    csvframe3 = pd.read_csv('D:\\Documents\\项目\\210121\\FIBER\\15BW100_10BeiJing.csv', skiprows=6, nrows=20000)
+    # csvframe2 = pd.read_csv('D:\\Documents\\项目\\210121\\FIBER\\15BW60_10_2.csv', skiprows=6, nrows=20000)
+    # csvframe3 = pd.read_csv('D:\\Documents\\项目\\210121\\FIBER\\15BW100_10BeiJing.csv', skiprows=6, nrows=20000)
+    csvframe2 = pd.read_csv('D:\\Documents\\项目\\20210326\\预迭代结果\\PREF_BW200_DF10.csv', skiprows=6, nrows=40001)
+    csvframe3 = pd.read_csv('D:\\Documents\\项目\\20210326\\预迭代结果\\BG.csv', skiprows=6, nrows=40001)
 
     # plt.plot(csvframe['Freq(Hz)'], csvframe['S21(DB)'])
     # plt.xlabel("Freq(Hz)")
@@ -65,10 +67,12 @@ if __name__ == '__main__':
 
     # -------------画开关幅频/相频--------------
     select = 0  # 幅频-0；相频-1
+    tags = csvframe2.keys()
+    # print(tags)
     if select == 0:
-        if 'S21(MAG)' in csvframe2:
+        if 'MAG' in tags[1]:
             plt.figure(1)  # 画开关幅频（MAG)
-            csvframe2_3_mag = csvframe2['S21(MAG)'] / csvframe3['S21(MAG)']
+            csvframe2_3_mag = csvframe2[tags[1]] / csvframe3[tags[1]]
             csvframe2_3_mag = np.maximum(csvframe2_3_mag, np.ones(csvframe2_3_mag.size) * 0.00001)
             csvframe2_3_mag = 10 * np.log(csvframe2_3_mag) / np.log(10)
 
@@ -77,9 +81,9 @@ if __name__ == '__main__':
             plt.plot(csvframe2['Freq(Hz)'] / (10 ** 9), csvframe2_3_mag)
             plt.xlabel("Freq(GHz)")
             plt.ylabel("S21(DB)")
-        elif 'S21(DB)' in csvframe2:
+        elif 'DB' in tags[1]:
             plt.figure(1)  # 画开关幅频（DB)
-            csvframe2_3_mag = csvframe2['S21(DB)'] - csvframe3['S21(DB)']
+            csvframe2_3_mag = csvframe2[tags[1]] #- csvframe3[tags[1]]
             # csvframe2_3_mag = csvframe2['S21(DB)']
 
             # 对实验数据滤波；目前有两种方式：平滑或互相关去噪
@@ -93,17 +97,17 @@ if __name__ == '__main__':
 
             plt.plot(csvframe2['Freq(Hz)'] / (10 ** 9), csvframe2_3_mag)
             # plt.plot(csvframe2['Freq(Hz)'] / (10 ** 9), csvframe2_3_mag_fil1)
-            plt.plot(csvframe2['Freq(Hz)'] / (10 ** 9), csvframe2_3_mag_fil2)
+            # plt.plot(csvframe2['Freq(Hz)'] / (10 ** 9), csvframe2_3_mag_fil2)
             plt.xlabel("Freq(GHz)")
-            plt.ylabel("S21(DB)")
+            plt.ylabel(tags[1])
     elif select == 1:
         plt.figure(2)  # 画开关相频（DEG)
-        csvframe2_3_deg = np.mod(csvframe2['S21(DEG)'] - csvframe3['S21(DEG)'] + 180, 360) - 180
+        csvframe2_3_deg = np.mod(csvframe2[tags[2]] - csvframe3[tags[2]] + 180, 360) - 180
         # csvframe2_3_deg = csvframe2['S21(DEG)'] - csvframe3['S21(DEG)']
         # csvframe2_3_deg = awgn_filter(np.array(csvframe2_3_deg), 30)
         plt.plot(csvframe2['Freq(Hz)'] / (10 ** 9), csvframe2_3_deg)
         plt.xlabel("Freq(GHz)")
-        plt.ylabel("S21(DEG)")
+        plt.ylabel(tags[2])
 
         ## 标记最大点和最小点
         deg_max = np.max(csvframe2_3_deg)
@@ -116,7 +120,7 @@ if __name__ == '__main__':
                  fontsize=15)
 
         plt.scatter([p1, p2], [deg_max, deg_min], s=35, marker='*', color='red')
-
+        plt.show()
     # plt.xlim(3.12, 3.1205)
 
     '''离线设计与实验数据获取'''
@@ -133,7 +137,7 @@ if __name__ == '__main__':
     print('amp_list =', amp_list)
     freq_measure = np.array(csvframe2['Freq(Hz)'])
     amp_measure = csvframe2_3_mag
-    print('gamma-B：', mlt.gmmb_correct(freq_measure/1e6, amp_measure))  # 3db带宽？
+    # print('gamma-B：', mlt.gmmb_correct(freq_measure/1e6, amp_measure))  # 3db带宽？
 
     bfs = loc.bfs_correct(f_list/1e6, freq_measure/1e6, amp_measure, 30)  # 单位MHz
     bfs = 10.833e3
@@ -146,7 +150,7 @@ if __name__ == '__main__':
     f_index = mlt.search_index(freq_design_seq, freq_measure)
 
     '''离线反馈'''
-    N_iteration = 7
+    N_iteration = 0
     for _ in range(N_iteration):
         amp_measure = corre_filter(amp_measure, gamma_B=30/f_resolution)
         expected_amp_sam = mlt.expected_gain2(f_index, amp_measure, 'square')
@@ -173,6 +177,6 @@ if __name__ == '__main__':
 
         amp_measure = mlt.awgn(measure_brian, snr=30)  # snr = 53
 
-    plt.plot(freq_measure/1e9, amp_measure, label='迭代' + str(N_iteration) + '次幅值', color='r')
+    # plt.plot(freq_measure/1e9, amp_measure, label='迭代' + str(N_iteration) + '次幅值', color='r')
     # plt.legend()
     plt.show()

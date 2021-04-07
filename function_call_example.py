@@ -7,12 +7,12 @@ import matplotlib.pyplot as plt
 import SBS_DSP as sd
 
 if __name__ == '__main__':
-    mode_type = "auto_mode"  # "manual_mode" or "auto_mode"
+    mode_type = "manual_mode"  # "manual_mode" or "auto_mode"
     if mode_type == "manual_mode":
         # manual mode (don't know how many times of loops)
         ''' [1] input initial settings (set requirements of filter) '''
-        bandwidth = 100  # MHz
-        comb_df = 5  # MHz
+        bandwidth = 20  # MHz
+        comb_df = 4  # MHz
         N_iteration = 1  # 迭代次数
         iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
         gamma_B = 10  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
@@ -49,10 +49,10 @@ if __name__ == '__main__':
     elif mode_type == "auto_mode":
         # TODO: auto mode (automatically stop loop when meets need)
         ''' [1] input initial settings (set requirements of filter) '''
-        bandwidth = 32  # MHz
-        comb_df = 4  # MHz
+        bandwidth = 100  # MHz
+        comb_df = 10  # MHz
         iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
-        gamma_B = 9  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
+        gamma_B = 38  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
         type_filter = 'square'  # type_filter='square','triangle'
 
         ''' [2] check and preprocess '''
@@ -72,6 +72,7 @@ if __name__ == '__main__':
         window_width = max([bandwidth, gamma_B])
         f_measure = np.linspace(central_freq - window_width, central_freq + window_width, 40000)  # 设置扫频范围与点数，单位MHz
         measure_brian = mlt.conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)
+        # print('gamma-B：', mlt.gmmb_correct(f_measure, measure_brian.real))  # 3db带宽？
 
         ''' [3] 迭代反馈,当平整度增加时停止迭代 '''
         N_iteration = 0  # 迭代次数统计
@@ -83,9 +84,9 @@ if __name__ == '__main__':
         normal_measure_brian = measure_brian.real / measure_max
         mean_normal_expected = np.mean(expected_gain_sam) / measure_max
         bias = abs(normal_measure_brian[f_index[0]:f_index[-1]] - mean_normal_expected)
-        flatness = min(bias)/max(bias)
+        flatness = max(bias) - min(bias)
 
-        while N_iteration < 10:
+        while N_iteration < 50:
             # 更新amp_seq，目前有4种方式
             new_amp_seq = mlt.change_amp_seq(amp_seq, expected_gain_sam, brian_measure_sam, iteration_type)
             nml_amp_seq = mlt.normalize_amp_seq(amp_seq, f_seq, phase_list)
@@ -99,17 +100,19 @@ if __name__ == '__main__':
             normal_measure_brian = new_measure_brian.real / measure_max
             mean_normal_expected = np.mean(expected_gain_sam) / measure_max
             bias = abs(normal_measure_brian[f_index[0]:f_index[-1]] - mean_normal_expected)
-            new_flatness = min(bias)/max(bias)
+            new_flatness = max(bias) - min(bias)
             if new_flatness >= flatness:
                 break
 
-            if N_iteration % 1 == 0:
+            if N_iteration % 10 == 0:
                 plt.plot(f_measure, measure_brian.real, label='迭代' + str(N_iteration) + '次幅值')
 
             amp_seq = new_amp_seq
             flatness = new_flatness
             measure_brian = new_measure_brian
             N_iteration += 1
+
+    # print('gamma-B：', mlt.gmmb_correct(f_measure, measure_brian.real))  # 3db带宽？
 
     ''' [4] 输出参数与画图看效果 '''
     print(amp_seq)

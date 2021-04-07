@@ -82,6 +82,8 @@ def initial_amp_seq(len_seq, type_filter):
 
 def initial_f_seq(len_seq, central_freq, df):
     f_seq = np.arange(-len_seq // 2 + 1, len_seq // 2 + 1) * df + central_freq
+    if len_seq % 2 == 0:
+        f_seq = f_seq - df/2
     return f_seq
 
 
