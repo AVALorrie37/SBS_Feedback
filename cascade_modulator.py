@@ -5,19 +5,18 @@
 import multi_Lorenz_2_triangle as mlt
 import numpy as np
 import matplotlib.pyplot as plt
-import SBS_DSP as sd
 
 if __name__ == '__main__':
     ''' [1] input initial settings (set requirements of filter) '''
     bandwidth = 20  # MHz
-    comb_df = 5  # MHz  小梳齿间隔
-    extend_df = 25  # MHz 大带宽间隔
+    comb_df = 4  # MHz  小梳齿间隔
+    extend_df = 20  # MHz 大带宽间隔
     num_copy = 5  # 级联调制器之后带宽扩展倍数
     amp_copy = np.ones(num_copy)  # 级联调制器之后每个扩展分量增益
-    amp_copy[1] = 0.5
+    # amp_copy = mlt.multi_change(amp_copy, [1, 3], [0.9, 0.5])  # 修改个别点
     N_iteration = 0  # 迭代次数
     iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
-    gamma_B = 10  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
+    gamma_B = 15  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
     type_filter = 'square'  # type_filter='square','triangle'
 
     ''' [2] check and preprocess '''

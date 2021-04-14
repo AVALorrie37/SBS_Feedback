@@ -216,6 +216,13 @@ def expected_gain2(f_index, measure_brian, type_filter):
     return expected_gain_sam
 
 
+def multi_change(data_list, index_list, change_data_list):
+    # 修改指定多个位置的列表值(data_list)
+    for i in range(len(index_list)):
+        data_list[index_list[i]] = change_data_list[i]
+    return data_list
+
+
 def change_amp_seq(amp_seq, expected_gain_sam, brian_measure_sam, iteration_type=1):
     # 功能：更新amp_seq；
     # iteration_type-更新方式：[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
