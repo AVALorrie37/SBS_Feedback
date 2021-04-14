@@ -10,9 +10,11 @@ import SBS_DSP as sd
 if __name__ == '__main__':
     ''' [1] input initial settings (set requirements of filter) '''
     bandwidth = 20  # MHz
-    comb_df = 4  # MHz  小梳齿间隔
+    comb_df = 5  # MHz  小梳齿间隔
     extend_df = 25  # MHz 大带宽间隔
-    num_copy = 1  # 级联调制器之后带宽扩展倍数
+    num_copy = 5  # 级联调制器之后带宽扩展倍数
+    amp_copy = np.ones(num_copy)  # 级联调制器之后每个扩展分量增益
+    amp_copy[1] = 0.5
     N_iteration = 0  # 迭代次数
     iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
     gamma_B = 10  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
@@ -37,7 +39,7 @@ if __name__ == '__main__':
     f_measure = np.linspace(central_freq - f_measure_width, central_freq + f_measure_width, 80000)  # 设置扫频范围与点数，单位MHz
     measure_brian = np.zeros(len(f_measure), dtype='complex128')
     for i in range(num_copy):
-        measure_brian += mlt.conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS+cf_list[i])
+        measure_brian += amp_copy[i]*mlt.conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS-cf_list[i])
 
     ''' [4] 输出参数与画图看效果 '''
     print(amp_seq)
