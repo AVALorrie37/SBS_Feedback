@@ -32,13 +32,13 @@ mpl.rcParams['axes.unicode_minus'] = False  # 解决保存图像是负号'-'显�
 def lorenz(omega, omega_B, gamma_B):
     # 输入：频率-omega；omega_B-布里渊增益最大点（BFS）；gamma_B-布里渊线宽
     # 输出：Lorenz型的增益因子g_B * g_0 * L_eff/A_eff
-    g_0 = 5 * 10 ** (-11)  # 代入石英光纤典型参量值，单位m/W
-    alpha = 0.19  # 光纤损耗，单位db/km
-    L_eff = 10.2 ** 3 * (1 - np.exp(-alpha * 10)) / alpha  # 代入光纤长度10.2km
-    MFD = 10.3 * 10 ** (-6)  # G652D模场直径：10.4+-0.8 um of 1550nm
-    A_eff = pi * MFD ** 2 / 4  # 此处近似修正因子k=1
-    gain_max = g_0 * L_eff / A_eff / 2  # lorenz峰值
-    # gain_max = 10000
+    # g_0 = 5 * 10 ** (-11)  # 代入石英光纤典型参量值，单位m/W
+    # alpha = 0.19  # 光纤损耗，单位db/km
+    # L_eff = 10.2 ** 3 * (1 - np.exp(-alpha * 10)) / alpha  # 代入光纤长度10.2km
+    # MFD = 10.3 * 10 ** (-6)  # G652D模场直径：10.4+-0.8 um of 1550nm
+    # A_eff = pi * MFD ** 2 / 4  # 此处近似修正因子k=1
+    # gain_max = g_0 * L_eff / A_eff / 2  # lorenz峰值
+    gain_max = 1
     gamma_b22 = (gamma_B / 2) ** 2
     gain_lorenz = gain_max * gamma_b22 / ((omega - omega_B) ** 2 + gamma_b22)
 
@@ -196,7 +196,7 @@ def expected_gain2(f_index, measure_brian, type_filter):
     if len_seq >1:
         if type_filter == 'square':
             # expected_gain_sam = np.ones(len_seq) * mean_measure_brian
-            expected_gain_sam = np.ones(len_seq) * np.mean(measure_brian[f_index[0]:f_index[-1]])
+            expected_gain_sam = np.ones(len_seq) * np.mean(measure_brian[f_index[1]:f_index[-2]])
         elif type_filter == 'triangle':
             mb_min = max(np.min(measure_brian), 0)
             mb_max = np.max(measure_brian)
@@ -221,6 +221,60 @@ def multi_change(data_list, index_list, change_data_list):
     for i in range(len(index_list)):
         data_list[index_list[i]] = change_data_list[i]
     return data_list
+
+
+def measure_sampling(measure_brian, f_index, sample_type=1):
+    # 对测量的布里渊增益在梳齿附近加权采样
+    # sample_type ：[1]-只采对应点；[2]-采对应点附近均值
+    if sample_type == 1:  # 只采对应点
+        brian_measure_sam = np.array([measure_brian[i] for i in f_index])  # 最接近频梳频率的采样点增益
+    elif sample_type == 2:  # 采对应点附近n_dots个点的均值
+        n_dots = 6001
+        sample_array = np.array([measure_brian[i-n_dots//2:i+n_dots//2+1] for i in f_index])
+        # print(sample_array)
+        brian_measure_sam = np.dot(sample_array, np.ones(n_dots)/n_dots)
+        # print(brian_measure_sam)
+    elif sample_type == 3:  # 采对应点附近ratio个自然线宽内点的均值
+        ratio = 1.5  # 加窗点数/自然线宽点数
+        n_dots = int(ratio*(f_index[1]-f_index[0])//2 * 2 + 1)  # 取点个数，奇数
+        print('n_dots = ', n_dots)
+        sample_array = np.array([measure_brian[i-n_dots//2:i+n_dots//2+1] for i in f_index])
+        # print(sample_array)
+        brian_measure_sam = np.dot(sample_array, np.ones(n_dots)/n_dots)
+        # print(brian_measure_sam)
+    elif sample_type == 4:  # 采对应点附近ratio个自然线宽内点的加权值
+        ratio = 1  # 加窗点数/自然线宽点数
+        n_dots = int(ratio*(f_index[1]-f_index[0])//2 * 2 + 1)  # 取点个数，奇数
+        print(n_dots)
+        sample_array = np.array([measure_brian[i-n_dots//2:i+n_dots//2+1] for i in f_index])
+        # print(sample_array)
+        half_width = 15  # 加窗半宽，MHz
+        f = np.linspace(-half_width, half_width, n_dots)
+        weights_list = lorenz(f, 0, half_width*2)
+        weights_list = weights_list / np.sum(weights_list)
+        print('weights_list = ', weights_list)
+        brian_measure_sam = np.dot(sample_array, weights_list)
+        print('brian_measure_sam = ', brian_measure_sam)
+    elif sample_type == 5:  # todo：采对应点附近ratio个自然线宽内点的加权值，加权值分为左偏，中心，右偏三种，修不对称的bug
+        ratio = 1  # 加窗点数/自然线宽点数
+        n_dots = int(ratio*(f_index[1]-f_index[0])//2 * 2 + 1)  # 取点个数，奇数
+        print(n_dots)
+        sample_array = np.array([measure_brian[i-n_dots//2:i+n_dots//2+1] for i in f_index])
+        print('sample_array =', sample_array)
+        half_width = 15  # 加窗半宽，MHz
+        f = np.linspace(-half_width, half_width, n_dots)
+        left = lorenz(f, half_width, half_width)
+        middle = lorenz(f, 0, half_width*2)
+        right = 1/lorenz(f, -half_width, half_width)
+        weights_lists = np.array([left/np.sum(left),middle/np.sum(middle),right/np.sum(right)]).T
+        print('weights_lists = ', weights_lists)
+        brian_measure_sams = np.dot(sample_array, weights_lists)
+        print('brian_measure_sams=',brian_measure_sams)
+        brian_measure_sam = brian_measure_sams[:, 1]
+        brian_measure_sam[0] = brian_measure_sams[0, 0]
+        brian_measure_sam[0] = brian_measure_sams[-1, 2]
+        # print(brian_measure_sam)
+    return brian_measure_sam
 
 
 def change_amp_seq(amp_seq, expected_gain_sam, brian_measure_sam, iteration_type=1):
