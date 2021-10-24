@@ -4,21 +4,20 @@
 import multi_Lorenz_2_triangle as mlt
 import numpy as np
 import matplotlib.pyplot as plt
-import SBS_DSP as sd
-import ref_PJcurvature as cc
+from ref_code import ref_PJcurvature as cc
 
 if __name__ == '__main__':
     ''' [1] input initial settings (set requirements of filter) '''
-    Bandwidth = 80  # MHz
+    Bandwidth = 54  # MHz
     iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
-    gamma_B = 15  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
+    gamma_B = 9  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
     type_filter = 'square'  # type_filter='square','triangle'
-    sample_type = 4  # [1]-只采对应点；[2]-采附近均值;[3]-采附近r个自然线宽内均值;[4]-采附近r个自然线宽内加权值
+    sample_type = 1  # [1]-只采对应点；[2]-采附近均值;[3]-采附近r个自然线宽内均值;[4]-采附近r个自然线宽内加权值
 
     max_curs = []
     pt_cur = 30  # 取通带内需观察曲率的点的个数
-    max_N_pump = 20  # 最大允许泵浦个数
-    for N_pump in range(Bandwidth // gamma_B+2, max_N_pump):
+    max_N_pump = 25  # 最大允许泵浦个数
+    for N_pump in range(Bandwidth // gamma_B+2, max_N_pump+1):
         ''' [2] 计算特定梳齿数时最接近设计要求的带宽和间隔 '''
         comb_df = round(Bandwidth / N_pump, 2)  # MHz
         bandwidth = comb_df * (N_pump-1)
@@ -118,16 +117,16 @@ if __name__ == '__main__':
             color="gray")  # 画频移后泵浦梳齿
 
     ''' [5-2] 部分迭代与最后一次响应 '''
-    expected_gain_sam = mlt.expected_gain2(f_index, measure_brian.real, type_filter)
-    measure_max = measure_brian.real.max()
-    normal_measure_brian = measure_brian.real / measure_max
-    normal_expected_gain = np.ones(len(measure_brian)) * expected_gain_sam[0] / measure_max
-
-    # plt.plot(f_measure, measure_brian.real, label='迭代' + str(N_iteration) + '次幅值')
-    plt.plot(f_measure, normal_measure_brian, label='迭代' + str(N_iteration) + '次幅值')
-    plt.plot(f_measure, normal_expected_gain, label='期望响应')
-
-    plt.legend()
+    # expected_gain_sam = mlt.expected_gain2(f_index, measure_brian.real, type_filter)
+    # measure_max = measure_brian.real.max()
+    # normal_measure_brian = measure_brian.real / measure_max
+    # normal_expected_gain = np.ones(len(measure_brian)) * expected_gain_sam[0] / measure_max
+    #
+    # # plt.plot(f_measure, measure_brian.real, label='迭代' + str(N_iteration) + '次幅值')
+    # plt.plot(f_measure, normal_measure_brian, label='迭代' + str(N_iteration) + '次幅值')
+    # plt.plot(f_measure, normal_expected_gain, label='期望响应')
+    #
+    # plt.legend()
 
     ''' [5-3] 最后一次响应对应曲率 '''
     # plt.figure(figsize=(40, 2), dpi=120)
@@ -136,11 +135,12 @@ if __name__ == '__main__':
     # plt.axis('equal')
 
     ''' [5-4] 平坦带采样处最大曲率变化情况 '''
-    # plt.figure()
-    # x = np.arange(Bandwidth // gamma_B+2, max_N_pump, 1).astype(dtype=np.str)
-    # plt.plot(x, max_curs, marker="o")
-    # plt.xlabel('N_pump')
-    # plt.ylabel('max curvature')
+    plt.figure()
+    x = np.arange(Bandwidth // gamma_B+2, max_N_pump+1, 1).astype(dtype=np.str)
+    plt.plot(x, max_curs, marker="o")
+    plt.xlabel('N_pump')
+    plt.ylabel('max curvature')
+
 
     plt.show()
 

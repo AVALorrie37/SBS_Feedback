@@ -113,7 +113,7 @@ def conv_lorenz(x, amp_seq, f_seq, gamma_b, BFS):
     return total_brian
 
 
-def search_index(f_seq, f_measure):
+def search_index0(f_seq, f_measure):
     # 功能：找到f_seq在f_measure中最接近位置(<0.51*f_resolution)的索引f_index
     # PS : 当前默认每个点都能找到，如果范围不对应可能会出现隐藏bug
     f_index = np.zeros(f_seq.size, dtype=int)
@@ -125,6 +125,28 @@ def search_index(f_seq, f_measure):
                 f_index[i] = j
                 index_bef = j
                 break
+    return f_index
+
+
+def search_index(f_seq, f_measure):
+    # 功能：找到f_seq在f_measure中最接近位置(差的绝对值最小)的索引f_index
+    # PS : 当前默认每个点都能找到，如果范围不对应可能会出现隐藏bug
+    f_index = np.zeros(f_seq.size, dtype=int)
+    idx_seq = 0
+    find_num = 0
+    idx_min = 0
+    idx_max = -1  # 默认梳齿不是f_measure最后一个元素
+    while find_num < f_seq.size:
+        freq_slide = abs(f_measure[idx_min: idx_max] - f_seq[idx_seq])
+        find_idx = np.argmin(freq_slide)+idx_min
+        f_index[idx_seq] = find_idx
+        find_num += 1
+        if idx_seq < 0:
+            idx_seq = -idx_seq
+            idx_max = find_idx  # 更新搜索右边界
+        else:
+            idx_min = find_idx  # 更新搜索左边界
+            idx_seq = -(idx_seq+1)
     return f_index
 
 

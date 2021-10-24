@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import multi_Lorenz_2_triangle as mlt
 import SBS_DSP as sd
 import location_by_correlation as loc
+from scipy.signal import savgol_filter
 from math import pi
 import time
 
@@ -22,6 +23,19 @@ def awgn_filter(x, window_size):
     for i in np.invert(range(length)):
         z[i + window_size] = np.sum(y[i:i + window_size]) / window_size
     return z
+
+
+def awgn_filter2(measure_brian, window_size):
+    # 功能：滑动平均去噪
+    corr_refine = measure_brian
+    index_start = int(window_size/2)
+    ref_brian = np.ones(window_size)/window_size
+    # print(ref_brian)
+    corr = np.correlate(measure_brian, ref_brian)
+    index_max = measure_brian.argmax()
+    corr_refine[index_start:-index_start+1] = corr
+    corr_refine = corr_refine / corr_refine.max() * np.mean(measure_brian[index_max-5:index_max+5])
+    return corr_refine
 
 
 def lorenz(omega, omega_B, gamma_B):
@@ -51,6 +65,21 @@ def corre_filter(measure_brian, gamma_B):
     index_max = measure_brian.argmax()
     corr_refine = corr / corr.max() * np.mean(measure_brian[index_max-5:index_max+5])
     return corr_refine
+
+
+def corre_filter2(measure_brian, gamma_B):
+    # 功能：洛伦兹互相关去噪，修改线宽gamma_B影响分辨率
+    x = np.linspace(-3 * 10 ** 3, 3 * 10 ** 3, 1000)  # 扫频范围，单位MHz
+    ref_brian = mlt.lorenz(x, 0, gamma_B)
+    # plt.plot(x, ref_brian)
+    corr_refine = measure_brian
+    index_start = int(1000/2)
+    corr = np.correlate(measure_brian, ref_brian)
+    index_max = abs(measure_brian).argmax()
+    corr_refine[index_start:-index_start+1] = corr
+    corr_refine = corr_refine / corr_refine.max() * np.mean(measure_brian[index_max-5:index_max+5])
+    return corr_refine
+
 
 if __name__ == '__main__':
     '''计算开关增益'''
@@ -140,6 +169,7 @@ if __name__ == '__main__':
     # print('gamma-B：', mlt.gmmb_correct(freq_measure/1e6, amp_measure))  # 3db带宽？
 
     bfs = loc.bfs_correct(f_list/1e6, freq_measure/1e6, amp_measure, 30)  # 单位MHz
+    print('cal_BFS =', bfs)
     bfs = 10.833e3
     print('BFS =', bfs)
 
@@ -150,9 +180,10 @@ if __name__ == '__main__':
     f_index = mlt.search_index(freq_design_seq, freq_measure)
 
     '''离线反馈'''
-    N_iteration = 0
+    N_iteration = 3
     for _ in range(N_iteration):
-        amp_measure = corre_filter(amp_measure, gamma_B=30/f_resolution)
+        # amp_measure = corre_filter(amp_measure, gamma_B=30/f_resolution)
+        amp_measure = savgol_filter(amp_measure, 301, 3)
         expected_amp_sam = mlt.expected_gain2(f_index, amp_measure, 'square')
         amp_measure_sam = np.array([amp_measure[i] for i in f_index])  # 最接近频梳频率的采样点增益
         # print('amp_measure_sam =', amp_measure_sam)
@@ -177,6 +208,6 @@ if __name__ == '__main__':
 
         amp_measure = mlt.awgn(measure_brian, snr=30)  # snr = 53
 
-    # plt.plot(freq_measure/1e9, amp_measure, label='迭代' + str(N_iteration) + '次幅值', color='r')
-    # plt.legend()
+    plt.plot(freq_measure/1e9, amp_measure, label='迭代' + str(N_iteration) + '次幅值', color='r')
+    plt.legend()
     plt.show()

@@ -7,6 +7,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from math import pi
+from scipy.signal import savgol_filter
 import time
 
 # # 解决字体显示问题
@@ -94,7 +95,8 @@ def bfs_correct(f_seq, f_measure, measure_brian, gamma_B=15):
     # 前提：观察窗口内有SBS增益且只有一个最大值)
     f_resolution = f_measure[1]-f_measure[0]
     print('f_resolution',f_resolution)
-    amp_measure = corre_filter(measure_brian, gamma_B / f_resolution)
+    # amp_measure = corre_filter(measure_brian, gamma_B / f_resolution)
+    amp_measure = savgol_filter(measure_brian, 301, 3)
     cfp=np.median(f_seq)
     cf=f_measure[amp_measure.argmax()]
     print('cfp:', cfp, 'cf:', cf)

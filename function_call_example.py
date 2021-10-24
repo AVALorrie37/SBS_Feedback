@@ -4,16 +4,17 @@ TODO: show how to call functions in this project to design pump
 import multi_Lorenz_2_triangle as mlt
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 import SBS_DSP as sd
 
 if __name__ == '__main__':
     ''' [1] input initial settings (set requirements of filter) '''
-    bandwidth = 48  # MHz
-    comb_df = 8  # MHz
+    bandwidth = 90  # MHz
+    comb_df = 3.6  # MHz
     iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
-    gamma_B = 15  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
+    gamma_B = 9  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
     type_filter = 'square'  # type_filter='square','triangle'
-    sample_type = 4  # [1]-只采对应点；[2]-采附近均值;[3]-采附近r个自然线宽内均值;[4]-采附近r个自然线宽内加权值
+    sample_type = 1  # [1]-只采对应点；[2]-采附近均值;[3]-采附近r个自然线宽内均值;[4]-采附近r个自然线宽内加权值
 
     mode_type = "auto_mode"  # "manual_mode" or "auto_mode"
     if mode_type == "manual_mode":
@@ -52,7 +53,7 @@ if __name__ == '__main__':
         # TODO: auto mode (automatically stop loop when meets need)
 
         ''' [2] check and preprocess '''
-        assert bandwidth % comb_df == 0
+        # assert bandwidth % comb_df == 0
         N_pump = int(bandwidth / comb_df)+1
         central_freq = 0  # 因为只要确定形状，故此处中心频率采用相对值，设置为0
         BFS = 0  # 因为只要确定形状，故不考虑布里渊频移，设置为0
@@ -87,7 +88,7 @@ if __name__ == '__main__':
         flatness = max(band_pass_res) - min(band_pass_res)
         print(flatness)
 
-        while N_iteration < 10:
+        while N_iteration < 4:
             if N_iteration % 2 == 0:  # 画图
                 # plt.plot(f_measure, measure_brian.real, label='迭代' + str(N_iteration) + '次幅值')  # 原始响应
                 plt.plot(f_measure, normal_measure_brian, label='迭代' + str(N_iteration) + '次幅值')  # 最大值归一化
@@ -137,5 +138,12 @@ if __name__ == '__main__':
 
     plt.legend()
     plt.show()
+
+    '''[频率，增益]写入csv '''
+    measure_brian_csv = pd.DataFrame({'Freq': f_measure, 'amp':  measure_brian.real})
+    pump_seq_csv = pd.DataFrame({'泵浦中心频率偏移量': f_seq, '泵浦功率': amp_seq})
+    # 将DataFrame存储为csv,index表示是否显示行名，default=True
+    measure_brian_csv.to_csv("D:\\Documents\\项目\\仿真数据\\measure_brian.csv", index=False, sep=',')
+    pump_seq_csv.to_csv("D:\\Documents\\项目\\仿真数据\\pump_seq.csv", index=False, sep=',')
 
 

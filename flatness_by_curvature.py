@@ -7,7 +7,7 @@ TODO:1.计算泵浦对应处曲率并作图
 import multi_Lorenz_2_triangle as mlt
 import numpy as np
 import matplotlib.pyplot as plt
-import ref_PJcurvature as cc
+from ref_code import ref_PJcurvature as cc
 
 if __name__ == '__main__':
     ''' [1] input initial settings (set requirements of filter) '''

@@ -5,22 +5,23 @@
 import multi_Lorenz_2_triangle as mlt
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 if __name__ == '__main__':
     ''' [1] input initial settings (set requirements of filter) '''
-    bandwidth = 25  # MHz
-    comb_df = 5  # MHz  小梳齿间隔
-    extend_df = 45.5  # MHz 大带宽间隔
-    num_copy = 3  # 级联调制器之后带宽扩展倍数
+    bandwidth = 30  # MHz
+    comb_df = 3.6  # MHz  小梳齿间隔
+    extend_df = 20  # MHz 大带宽间隔
+    num_copy = 1  # 级联调制器之后带宽扩展倍数
     amp_copy = np.ones(num_copy)/num_copy  # 级联调制器之后每个扩展分量增益
-    # amp_copy = mlt.multi_change(amp_copy, [1, 3], [0.9, 0.5])  # 修改个别点
-    N_iteration = 15  # 迭代次数
+    # amp_copy = mlt.multi_change(amp_copy, [0, -1], [0.045, 0.045])  # 修改个别点
+    N_iteration = 4  # 迭代次数
     iteration_type = 1  # 迭代方式，[1]-2+3，[2]-线性，[3]-根号,[4]-边界参考旁边 (默认选[1])
-    gamma_B = 11  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
+    gamma_B = 9  # MHz，布里渊线宽(通过单梳测量得到，可以只存一次）
     type_filter = 'square'  # type_filter='square','triangle'
 
     ''' [2] check and preprocess '''
-    assert bandwidth % comb_df == 0
+    # assert bandwidth % comb_df == 0
     N_pump = int(bandwidth / comb_df)
     central_freq = 0  # 因为只要确定形状，故此处中心频率采用相对值，设置为0
     BFS = 0  # 因为只要确定形状，故不考虑布里渊频移，设置为0
@@ -52,12 +53,25 @@ if __name__ == '__main__':
         amp_seq = mlt.change_amp_seq(amp_seq, expected_gain_sam, brian_measure_sam, iteration_type)
         nml_amp_seq = mlt.normalize_amp_seq(amp_seq, f_seq, phase_list)
         sgl_measure_brian = mlt.conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)
+    nml_amp_seq[0] = nml_amp_seq[2]*1.5
+    nml_amp_seq[-1] = nml_amp_seq[-3]*1.5
+    print("nml_amp_seq = ", nml_amp_seq)
 
     for i in range(num_copy):
         measure_brian += amp_copy[i] * mlt.conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS - cf_list[i])
 
     ''' [4] 输出参数与画图看效果 '''
     print(amp_seq)
+    plt.bar(f_seq, amp_seq / amp_seq.max() * measure_brian.real.max() / 2, width=1.1,
+            color="red")  # 画泵浦梳齿
     plt.plot(f_measure, measure_brian.real, label='迭代' + str(N_iteration) + '次幅值')
     # plt.legend()
     plt.show()
+
+
+    '''[频率，增益]写入csv '''
+    measure_brian_csv = pd.DataFrame({'Freq': f_measure, 'amp':  measure_brian.real})
+    pump_seq_csv = pd.DataFrame({'泵浦中心频率偏移量': f_seq, '泵浦功率': amp_seq})
+    # 将DataFrame存储为csv,index表示是否显示行名，default=True
+    measure_brian_csv.to_csv("D:\\Documents\\项目\\仿真数据\\measure_brian.csv", index=False, sep=',')
+    pump_seq_csv.to_csv("D:\\Documents\\项目\\仿真数据\\pump_seq.csv", index=False, sep=',')
