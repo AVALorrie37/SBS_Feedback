@@ -11,7 +11,7 @@ from ref_code import ref_PJcurvature as cc
 
 if __name__ == '__main__':
     ''' [1] input initial settings (set requirements of filter) '''
-    bandwidth = 30  # MHz
+    bandwidth = 42  # MHz
     comb_df = 3  # MHz  小梳齿间隔
     extend_df = 20  # MHz 大带宽间隔
     N_iteration = 4  # 迭代次数

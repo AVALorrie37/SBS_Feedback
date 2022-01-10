@@ -34,7 +34,7 @@ def df_feedback(freq_design_seq, freq, gain_offset, BFS, FWHM):
     offset_f = temp*FWHM
     print('temp ratio', temp)
     print("Offset_f", offset_f)
-    new_freq_design[1:-1] = freq_design_seq_sam - offset_f*1e3
+    new_freq_design[1:-1] = freq_design_seq_sam - offset_f*1e6
     return new_freq_design
 
 if __name__ == '__main__':
@@ -51,7 +51,7 @@ if __name__ == '__main__':
     # assert bandwidth % comb_df == 0
     N_pump = int(bandwidth / comb_df)
     central_freq = 0  # 因为只要确定形状，故此处中心频率采用相对值，设置为0
-    BFS = 1  # 因为只要确定形状，故不考虑布里渊频移(MHz)，设置为0
+    BFS = 0.01  # 因为只要确定形状，故不考虑布里渊频移(MHz)，设置为0
 
     ''' [2-1] 初始化频梳幅值，频率与相位'''
     amp_seq = mlt.initial_amp_seq(N_pump, type_filter)
@@ -84,7 +84,7 @@ if __name__ == '__main__':
     if freq_feedback:
         for _ in range(10):
             # 更新freq_seq
-            f_seq = df_feedback(f_seq*1e6, f_measure*1e6, measure_brian.real, BFS/1e3, gamma_B)/1e6  # f_seq单位MHz
+            f_seq = df_feedback(f_seq*1e6, f_measure*1e6, measure_brian.real, BFS/1e3*0, gamma_B)/1e6  # f_seq单位MHz
             measure_brian = mlt.conv_lorenz(f_measure, nml_amp_seq, f_seq, gamma_B, BFS)  # 单位MHz
             print('new f_seq =', f_seq)
 

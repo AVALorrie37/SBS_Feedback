@@ -11,23 +11,35 @@ if __name__ == '__main__':
     # csvframe2 = pd.read_csv('D:\\Documents\\项目\\2021-10-8实验结果(材料0930)\\1.不同pump功率_调PC_记录双峰功率比最大值\\1.5um-7cm-chip1\\pump25.8\\10-2.31.csv')
     # csvframe3 = pd.read_csv('D:\\Documents\\项目\\2021-10-8实验结果(材料0930)\\1.不同pump功率_调PC_记录双峰功率比最大值\\1.5um-7cm-chip1\\BJ.csv')
     # 多音泵浦
-    csvframe2 = pd.read_csv('D:\\Documents\\项目\\2021-9-22 扫频验证\\300MHz正常.csv')
-    csvframe3 = pd.read_csv('D:\\Documents\\项目\\2021-9-22 扫频验证\\300MHz-BJ.csv')
+    # csvframe2 = pd.read_csv('D:\\Documents\\项目\\2021-9-22 扫频验证\\300MHz正常.csv')
+    # csvframe3 = pd.read_csv('D:\\Documents\\项目\\2021-9-22 扫频验证\\300MHz-BJ.csv')
+
+    #
+    plt.style.use('seaborn-whitegrid')
+    csvframe2 = pd.read_csv('D:\\Documents\\5G项目\\2021-10-25\\pump20.5dbm--7.24dbm.csv',index_col=False, header=0, sep=',')
+    csvframe3 = pd.read_csv('D:\\Documents\\5G项目\\2021-10-25\\BJ.csv',index_col=False, header=0, sep=',')
 
     freq = csvframe2['x0000'] / (10 ** 9)  # GHz
+    freq = np.array(freq,dtype="float64")
     delta_freq = float(freq[1]-freq[0])
     csvframe2_3_mag = csvframe2['y0000'] - csvframe3['y0000']
 
     csvframe2_3_mag = savgol_filter(csvframe2_3_mag, 301, 3)
 
-    peaks, _ = find_peaks(csvframe2_3_mag, width=500, rel_height=0.1)
-    prominences = peak_prominences(csvframe2_3_mag, peaks)[0]
+    # peaks, _ = find_peaks(csvframe2_3_mag, width=1000, rel_height=0.1)
+
+    max_mag = np.max(csvframe2_3_mag)
+    peaks, _ = find_peaks(csvframe2_3_mag, height=[max_mag, max_mag])
+
+    prominences = np.array(peak_prominences(csvframe2_3_mag, peaks))[0]
     idx_main_peak = prominences.argmax()
     BFS = 15 - freq[peaks[idx_main_peak]]
     results_half = peak_widths(csvframe2_3_mag, peaks, rel_height=0.5)  # tuple{0：宽度;1：高度;2:xmin;3:xmax}
     results_full = peak_widths(csvframe2_3_mag, peaks, rel_height=1)
     FWHM_main_peak = results_half[0][idx_main_peak]*1e3*delta_freq  # MHz
-    gain_offset = csvframe2_3_mag + prominences[idx_main_peak] - max(csvframe2_3_mag[peaks])
+    baseline = max(csvframe2_3_mag[peaks])- prominences[idx_main_peak]
+    csvframe2_3_mag.tolist()
+    gain_offset = csvframe2_3_mag - baseline
 
     plt.plot(freq, csvframe2_3_mag,  label='gain_on_off')
     plt.plot(freq, gain_offset, label='gain_offset')
